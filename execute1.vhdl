@@ -123,6 +123,8 @@ architecture behaviour of execute1 is
         res2_sel : std_ulogic_vector(1 downto 0);
         spr_select : spr_id;
         pmu_spr_num : std_ulogic_vector(4 downto 0);
+        debug_spr : std_ulogic;
+        debug_spr_num : std_ulogic_vector(4 downto 0);
 	mul_in_progress : std_ulogic;
         mul_finish : std_ulogic;
         div_in_progress : std_ulogic;
@@ -143,6 +145,7 @@ architecture behaviour of execute1 is
          fp_exception_next => '0', trace_next => '0', prev_op => OP_ILLEGAL,
          oe => '0', mul_select => "00", res2_sel => "00",
          spr_select => spr_id_init, pmu_spr_num => 5x"0",
+         debug_spr => '0', debug_spr_num => 5x"0",
          mul_in_progress => '0', mul_finish => '0', div_in_progress => '0',
          no_instr_avail => '0', instr_dispatch => '0', ext_interrupt => '0',
          taken_branch_event => '0', br_mispredict => '0',
@@ -218,6 +221,10 @@ architecture behaviour of execute1 is
     -- PMU signals
     signal x_to_pmu : Execute1ToPMUType;
     signal pmu_to_x : PMUToExecute1Type;
+
+    -- Debug signals
+    signal x_to_debug : Execute1ToDebugType;
+    signal debug_to_x : DebugToExecute1Type;
 
     -- signals for logging
     signal exception_log : std_ulogic;
@@ -447,6 +454,14 @@ begin
             p_out => pmu_to_x
             );
 
+    debug_0: entity work.debug
+        port map (
+            clk => clk,
+            rst => rst,
+            p_in => x_to_debug,
+            p_out => debug_to_x
+            );
+
     dbg_ctrl_out <= ctrl;
     log_rd_addr <= ex2.log_addr_spr;
 
@@ -479,6 +494,9 @@ begin
     x_to_pmu.spr_num <= ex1.pmu_spr_num;
     x_to_pmu.spr_val <= ex1.e.write_data;
     x_to_pmu.run <= '1';
+
+    x_to_debug.spr_num <= ex1.debug_spr_num;
+    x_to_debug.spr_val <= ex1.e.write_data;
 
     -- XER forwarding.  The CA and CA32 bits are only modified by instructions
     -- that are handled here, so for them we can just use the result most
@@ -1191,7 +1209,7 @@ begin
                         report "MFSPR to slow SPR " & integer'image(decode_spr_num(e_in.insn));
                     end if;
                     slow_op := '1';
-                    if e_in.spr_select.ispmu = '0' then
+                    if e_in.spr_select.ispmu = '0' and e_in.spr_select.isdebug = '0' then
                         case e_in.spr_select.sel is
                             when SPRSEL_LOGD =>
                                 v.se.inc_loga := '1';
@@ -1372,6 +1390,8 @@ begin
             v.e.valid := '0';
             v.oe := e_in.oe;
             v.spr_select := e_in.spr_select;
+            v.debug_spr := '1';
+            v.debug_spr_num := e_in.insn(20 downto 16);
             v.pmu_spr_num := e_in.insn(20 downto 16);
             v.mul_select := e_in.sub_select(1 downto 0);
             v.se := side_effect_init;
@@ -1679,6 +1699,9 @@ begin
         x_to_pmu.pmm_msr <= ctrl.msr(MSR_PMM);
         x_to_pmu.pr_msr <= ctrl.msr(MSR_PR);
 
+        x_to_debug.mfspr <= '0';
+        x_to_debug.mtspr <= '0';
+
         if v.e.valid = '0' or flush_in = '1' then
             v.e.write_enable := '0';
             v.e.write_cr_enable := '0';
@@ -1713,7 +1736,11 @@ begin
         if ex1.res2_sel(0) = '0' then
             sprres := spr_result;
         else
-            sprres := pmu_to_x.spr_val;
+            if ex1.debug_spr = '1' then
+                sprres := debug_to_x.spr_val;
+            else
+                sprres := pmu_to_x.spr_val;
+            end if;
         end if;
         if ex1.res2_sel(1) = '0' then
             ex_result := rcresult;

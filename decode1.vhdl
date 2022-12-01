@@ -408,6 +408,8 @@ architecture behaviour of decode1 is
                 i.sel := SPRSEL_DEC;
             when SPR_PVR =>
                 i.sel := SPRSEL_PVR;
+            when SPR_CIABR =>
+                i.isdebug := '1';
             when 724 =>     -- LOG_ADDR SPR
                 i.sel := SPRSEL_LOGA;
             when 725 =>     -- LOG_DATA SPR

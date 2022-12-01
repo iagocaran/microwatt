@@ -42,6 +42,7 @@ package common is
     constant SPR_SRR0   : spr_num_t := 26;
     constant SPR_SRR1   : spr_num_t := 27;
     constant SPR_CFAR   : spr_num_t := 28;
+    constant SPR_CIABR  : spr_num_t := 187;
     constant SPR_HSRR0  : spr_num_t := 314;
     constant SPR_HSRR1  : spr_num_t := 315;
     constant SPR_SPRG0  : spr_num_t := 272;
@@ -141,9 +142,10 @@ package common is
 
     subtype spr_selector is std_ulogic_vector(2 downto 0);
     type spr_id is record
-        sel   : spr_selector;
-        valid : std_ulogic;
-        ispmu : std_ulogic;
+        sel    : spr_selector;
+        valid  : std_ulogic;
+        ispmu  : std_ulogic;
+        isdebug : std_ulogic;
     end record;
     constant spr_id_init : spr_id := (sel => "000", others => '0');
 
@@ -456,6 +458,18 @@ package common is
     type PMUToExecute1Type is record
         spr_val : std_ulogic_vector(63 downto 0);
         intr    : std_ulogic;
+    end record;
+
+    type Execute1ToDebugType is record
+        mfspr   : std_ulogic;
+        mtspr   : std_ulogic;
+        spr_num : std_ulogic_vector(4 downto 0);
+        spr_val : std_ulogic_vector(63 downto 0);
+        -- occur   : PMUEventType; -- Maybe create a DebugEventType
+    end record;
+
+    type DebugToExecute1Type is record
+        spr_val : std_ulogic_vector(63 downto 0);
     end record;
 
     type Decode2ToRegisterFileType is record
