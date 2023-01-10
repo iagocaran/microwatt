@@ -13,7 +13,7 @@ package common is
     -- MSR bit numbers
     constant MSR_SF  : integer := (63 - 0);     -- Sixty-Four bit mode
     constant MSR_EE  : integer := (63 - 48);    -- External interrupt Enable
-    constant MSR_PR  : integer := (63 - 49);    -- PRoblem state
+    constant MSR_PR  : integer := (63 - 49);    -- Problem state
     constant MSR_FP  : integer := (63 - 50);    -- Floating Point available
     constant MSR_FE0 : integer := (63 - 52);    -- Floating Exception mode
     constant MSR_SE  : integer := (63 - 53);    -- Single-step bit of TE field
@@ -24,6 +24,8 @@ package common is
     constant MSR_PMM : integer := (63 - 61);    -- Performance Monitor Mark
     constant MSR_RI  : integer := (63 - 62);    -- Recoverable Interrupt
     constant MSR_LE  : integer := (63 - 63);    -- Little Endian
+    constant MSR_S   : integer := (63 - 41);    -- Secure
+    constant MSR_HV  : integer := (63 - 3);     -- Hypervisor State
 
     -- SPR numbers
     subtype spr_num_t is integer range 0 to 1023;
@@ -461,15 +463,23 @@ package common is
     end record;
 
     type Execute1ToDebugType is record
-        mfspr   : std_ulogic;
-        mtspr   : std_ulogic;
-        spr_num : std_ulogic_vector(4 downto 0);
-        spr_val : std_ulogic_vector(63 downto 0);
-        -- occur   : PMUEventType; -- Maybe create a DebugEventType
+        mfspr          : std_ulogic;
+        mtspr          : std_ulogic;
+        spr_num        : std_ulogic_vector(4 downto 0);
+        spr_val        : std_ulogic_vector(63 downto 0);
+        d_msr          : std_ulogic;                          -- debug enabled
+        s_msr          : std_ulogic;                          
+        hv_msr         : std_ulogic;                          -- hypervisor mode
+        pr_msr         : std_ulogic;                          -- problem state
+        sf_msr         : std_ulogic;                          -- 64 bit mode
+        d_smfctrl      : std_ulogic;
+        instr_complete : std_ulogic;
+        instr_addr     : std_ulogic_vector(63 downto 0);
     end record;
 
     type DebugToExecute1Type is record
         spr_val : std_ulogic_vector(63 downto 0);
+        intr    : std_ulogic;
     end record;
 
     type Decode2ToRegisterFileType is record

@@ -82,6 +82,7 @@ architecture behaviour of execute1 is
         write_loga : std_ulogic;
         inc_loga : std_ulogic;
         write_pmuspr : std_ulogic;
+        write_debugspr : std_ulogic;
         ramspr_write_even : std_ulogic;
         ramspr_write_odd : std_ulogic;
         mult_32s : std_ulogic;
@@ -497,6 +498,8 @@ begin
 
     x_to_debug.spr_num <= ex1.debug_spr_num;
     x_to_debug.spr_val <= ex1.e.write_data;
+    x_to_debug.instr_complete <= wb_events.instr_complete;
+    x_to_debug.instr_addr <= e_in.nia;
 
     -- XER forwarding.  The CA and CA32 bits are only modified by instructions
     -- that are handled here, so for them we can just use the result most
@@ -1264,6 +1267,7 @@ begin
                         "=" & to_hstring(c_in);
                 end if;
                 v.se.write_pmuspr := e_in.spr_select.ispmu;
+                v.se.write_debugspr := e_in.spr_select.isdebug;
                 if e_in.spr_select.valid = '1' and e_in.spr_select.ispmu = '0' then
                     case e_in.spr_select.sel is
                         when SPRSEL_XER =>
@@ -1411,7 +1415,7 @@ begin
         v.busy := '0';
         bypass_valid := '0';
 
-        irq_valid := ex1.msr(MSR_EE) and (pmu_to_x.intr or ctrl.dec(63) or ext_irq_in);
+        irq_valid := (debug_to_x.intr) or (ex1.msr(MSR_EE) and (pmu_to_x.intr or ctrl.dec(63) or ext_irq_in));
 
 	-- Next insn adder used in a couple of places
 	next_nia <= std_ulogic_vector(unsigned(e_in.nia) + 4);
@@ -1458,9 +1462,16 @@ begin
             elsif irq_valid = '1' then
                 -- Don't deliver the interrupt until we have a valid instruction
                 -- coming in, so we have a valid NIA to put in SRR0.
+                v.e.srr1 := (others => '0');
+                exception := '1';
                 if pmu_to_x.intr = '1' then
                     v.e.intr_vec := 16#f00#;
                     report "IRQ valid: PMU";
+                elsif debug_to_x.intr = '1' then
+                    v.e.intr_vec := 16#d00#;
+                    v.e.srr1(47 - 33) := '1';
+                    v.e.srr1(47 - 43) := '1';
+                    report "IRQ valid: Debug";
                 elsif ctrl.dec(63) = '1' then
                     v.e.intr_vec := 16#900#;
                     report "IRQ valid: DEC";
@@ -1469,8 +1480,6 @@ begin
                     report "IRQ valid: External";
                     v.ext_interrupt := '1';
                 end if;
-                v.e.srr1 := (others => '0');
-                exception := '1';
 
             end if;
         end if;
@@ -1701,6 +1710,11 @@ begin
 
         x_to_debug.mfspr <= '0';
         x_to_debug.mtspr <= '0';
+        x_to_debug.s_msr <= ctrl.msr(MSR_S);
+        x_to_debug.hv_msr <= ctrl.msr(MSR_HV);
+        x_to_debug.pr_msr <= ctrl.msr(MSR_PR);
+        x_to_debug.sf_msr <= ctrl.msr(MSR_SF);
+        x_to_debug.d_smfctrl <= '0';  -- SMFCTRL_D to be considered if hypervisor implemented
 
         if v.e.valid = '0' or flush_in = '1' then
             v.e.write_enable := '0';
@@ -1793,6 +1807,7 @@ begin
                 v.log_addr_spr := std_ulogic_vector(unsigned(ex2.log_addr_spr) + 1);
             end if;
             x_to_pmu.mtspr <= ex1.se.write_pmuspr;
+            x_to_debug.mtspr <= ex1.se.write_debugspr;
         end if;
 
  	if interrupt_in.intr = '1' then
